@@ -1,0 +1,24 @@
+---
+title: "Patients"
+author: "Nino Krupic"
+date: "9/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+HHH
+
+```{r}
+read.csv(file = "inflammation-01.csv", header = FALSE)
+```
+
+```{r}
+dim(inflammation_01)
+```
+
+
+
+

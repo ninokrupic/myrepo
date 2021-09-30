@@ -1,0 +1,553 @@
+---
+title: 'Tutorial 4: Visualizations'
+author: "Caroline Kjær Børsting"
+date: "9/23/2021"
+output: html_document
+---
+---
+
+In this tutorial, you learn the basics of how to do visualizations in R, such as how to create ggplot objects, change colors, facets, legends etc. In addition to the basic stuff, you will also get to play around with some of my favorite plotting functions in R; for example how to plot heatmaps on top of real geographical maps, create time series plots which move as a function of time and how to turn boring scatter plots into GIFs. These visualization methods will hopefully provide us with some great insights about app reviews, stock prices, police killings and worldwide GDP. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("pacman")
+
+#We will use different functions from a lot of different packages. The easiest way to install and load multiple packages at once is to use the p_load function from the pacman package:
+pacman::p_load(
+  ggplot2, #for plotting graphics
+  ggmap, #for plotting maps
+  RColorBrewer, #provide pretty colour palettes
+  lubridate, #for converting time variables into date format
+  hrbrthemes, #for more style themes
+  data.table, #for working with data.table
+  dplyr, #for count function
+  tidytext, #for text mining functions such as unnest()
+  wordcloud,
+  tm, #for removing stopwords
+  ggdist, #for raincloud plots
+  tidyquant, #for theme_tq
+  prismatic, #for color handling in plots
+  gganimate, #for animated plots
+  gifski #for rendering animated plots as GIFs instead of single frames
+)
+```
+
+##Apple stock prices
+The first dataset we will work with today is Apple stock prices from 1980-2021. Data is kept daily and presented in USD currency.
+
+###Loading data:
+```{r}
+#Let's start by loading the data using the read.csv() function:
+apple_stock_prices <- read.csv("AppleStockPrices.csv")
+
+#Then we can see what the data looks like by displaying the headers:
+head(apple_stock_prices)
+
+#As you could see, this dataset contain timeseries of stock prices over a period of 21 years. We will therefore treat the data as a timeseries. When working with timeseries, it is important that our time variable is in the correct format. We can check what the format of our variables is by running the following command which displays the structure of our data:
+str(apple_stock_prices)
+#The second column displays the format of each variable. As you can see, all variables are numeric ("num") except the first variable "Date" which is a character string ("chr"). The "Date" variable will be our time variable, and we therefore need it to take the format "Date" instead of "chr". 
+
+#Luckily, the "ymd" function from the "lubridate" package" allows us to do this very easily:
+apple_stock_prices$Date <- ymd(apple_stock_prices$Date) #ymd is short for year-month-date format
+
+#So how does it look now?
+str(apple_stock_prices)
+#Exactly as we want it to, so now we are ready to start plotting!
+```
+
+###Timeseries plot
+We will base most of today's plots on the "ggplot2" package which you can read more about by typing "ggplot2" in the Help tab. 
+```{r}
+#Let's start out by by making a simple lineplot with time on the x-axis and opening stock price on the y-axis:
+
+apple_stock_prices %>% 
+  ggplot(aes(x=Date, y=Open))+
+  geom_line()
+
+#We can change the axis names by adding labels:
+apple_stock_prices %>% 
+  ggplot(aes(x=Date, y=Open))+
+  geom_line() + 
+  labs(x = "", y = "Opening price") #you can write whatever you want inside the quotation marks. I think the x-label is a bit redundant here, so I just leave this empty.
+
+#And add a title:
+apple_stock_prices %>% 
+  ggplot(aes(x=Date, y=Open))+
+  geom_line() + 
+  labs(x = "", y = "Opening price", title = "Apple stock prices")
+
+#We can also rotate the text along the x-axis, if we think that this looks better:
+apple_stock_prices %>% 
+  ggplot(aes(x=Date, y=Open))+
+  geom_line() + 
+  labs(x = "", y = "Opening price", title = "Apple stock prices") +
+  theme(axis.text.x=element_text(angle=60, hjust=1)) #we tilt it 60 degrees. hjust is the horizontal justification. We set it to 1 because we want it the horizontally oriented. 
+
+#And we can change the color of the line, if we think that this looks better:
+apple_stock_prices %>% 
+  ggplot(aes(x=Date, y=Open))+
+  geom_line(color="palegreen4") + #find more colorcodes here: http://sape.inf.usi.ch/quick-reference/ggplot2/colour
+  labs(x = "", y = "Opening price", title = "Apple stock prices") +
+  theme(axis.text.x=element_text(angle=60, hjust=1)) 
+
+#Or add a straight line at some level, if we think that this adds something to the story:
+apple_stock_prices %>% 
+  ggplot(aes(x=Date, y=Open))+
+  geom_line(color="palegreen4") + 
+  labs(x = "", y = "Opening price", title = "Apple stock prices") +
+  theme(axis.text.x=element_text(angle=60, hjust=1))+
+  geom_hline(yintercept=100, color="coral3", size=.5) 
+```
+
+###Dual timeseries charts
+```{r}
+#We can also add one more line representing one more variable to our lineplot. Fx we could plot the stock volume together with the opening price:
+apple_stock_prices %>% 
+  ggplot(aes(x=Date))+
+        geom_line(aes(y=Open),color="palegreen4") + 
+        geom_line(aes(y=Volume),color="skyblue3") + 
+        labs(x = "", y = "Opening price", title = "Apple stock prices") +
+        theme(axis.text.x=element_text(angle=60, hjust=1)) 
+#This looks a bit weird, given that the two variables are represented on quite different scales. 
+
+#We can help this a bit by scaling one of the variables to make it look a bit prettier:
+apple_stock_prices$Volume <- scale(apple_stock_prices$Volume, center = F) #We set center = FALSE becasue we don't want the variable to be centered around 0. 
+
+#How does it look now?
+apple_stock_prices %>% 
+  ggplot(aes(x=Date))+
+        geom_line(aes(y=Open),color="palegreen4") + 
+        geom_line(aes(y=Volume),color="skyblue3") + 
+        labs(x = "", y = "Opening price", title = "Apple stock prices") +
+        theme(axis.text.x=element_text(angle=60, hjust=1)) 
+#Better but not awesome. Probably, it is just not very meaningful to plot stock price and stock volume together, so let's just leave it there. But I hope this worked to illustrate how easy it is to plot several variables on top of each other. 
+```
+
+###Animated timeseries 
+```{r}
+#The "gganimate" package allows us to turn our timeseries plots alive! 
+
+#First, we must create our ggplot object and add a line- and point geom. 
+anim_object <- apple_stock_prices %>%
+  ggplot(aes(x=Date, y=Open)) + 
+  geom_point() + 
+  geom_line() +
+  theme_minimal() + #we chose theme_minimal to remove the background
+  transition_reveal(Date) #and this is where the magic happens! The "transition_reveal" functions makes sure that only one datapoint is revealed at a time. 
+
+animate(anim_object,renderer = gifski_renderer()) #we use the "gifski" package to render our object into a moving GIF and not just seperate pictures. 
+
+#Now, let's add a title to the gif. I would like to have both a normal title and a subtitle that contains the given year. Currently, we don't have a variable that contains only the year; all we have is a variable containing the date. We can, however, use the format() function to isolate the year from the date:
+apple_stock_prices$Year <- format(apple_stock_prices$Date, format="%Y")
+
+#And then insert it as another line in our gg-object:
+anim_object <- apple_stock_prices %>%
+  ggplot(aes(x=Date, y=Open)) + 
+  geom_point() + 
+  geom_line() +
+  theme_minimal() +
+  transition_reveal(Date)+
+  labs(title = "Apple stock prices", subtitle = "Year: {format(frame_along, '%Y')}")
+
+#Again, we must render our gg-object:
+animate(anim_object,renderer = gifski_renderer())
+
+#Besides making the timeseries move as the stock price changes, you can also make the axes move and keep the timeseries stable as the stock price changes. We do this by using the view_follow() function from the gganimate package:
+anim_object <- apple_stock_prices %>%
+  ggplot(aes(x=Date, y=Open)) + 
+  geom_point() + 
+  geom_line() +
+  theme_minimal() +
+  transition_reveal(Date) + 
+  view_follow()+
+  labs(title = "Apple stock prices", subtitle = "Year: {format(frame_along, '%Y')}")
+
+#Again we must render our gg-object:
+animate(anim_object,renderer = gifski_renderer())
+```
+
+##App review sentiment:
+The second dataset that we will work with today contains reviews scraped from the Google Play Store for the ecommerce company Nykaa, ending August 2021. The dataset cotains the actual review text as well as a sentiment score binning, where only reviews with 5 star rating are considered POSITIVE. Those with 3 and 4 star rating are considered NEUTRAL and everything else is NEGATIVE.
+
+###Loading data
+```{r}
+#First we will load the dataset using the read.csv() function. 
+sentiment <- read.csv("nykaa_review_sentiment.csv")
+```
+
+###Basic plots
+```{r}
+#Having loaded the dataset, we can now take a look at the data to see what we're dealing with. 
+
+#First of all, we can extract some insights from the sentiment_label variable. For example, it would be interesting to know how the reviews are distributed in terms of sentiment. To do this, we must first figure out how many reviews of each class the dataset contains. The data.table package offers a neat way of extracting this information by creating an aggregated dataset. 
+
+#In order to use the functions from the data.table package, we must first turn out "sentiment" dataframe into a data.table:
+sentiment <- as.data.table(sentiment)
+
+#Now we can create an aggregated dataset that contains the number of reviews of each of the "sentiment_labels" classes:
+sentiment_agg <- sentiment[,list(sum = length(content)), by = "sentiment_labels"]
+
+#We can then plot the sentiment labels from the the aggregated sentiment dataset:
+sentiment_agg %>% 
+ggplot(aes(sentiment_labels, sum))+
+  geom_bar(stat = "identity")
+
+#And change size of the bins:
+sentiment_agg %>% 
+ggplot(aes(sentiment_labels, sum))+
+  geom_bar(stat = "identity", width = 0.7)
+
+#And the colors:
+sentiment_agg %>% 
+ggplot(aes(sentiment_labels, sum))+
+  geom_bar(stat = "identity", fill = "wheat3", width = 0.7)
+
+#And we can add a title and labels to the x and y axis:
+sentiment_agg %>% 
+ggplot(aes(sentiment_labels, sum))+
+  geom_bar(stat = "identity", fill = "wheat3", width = 0.7)+
+  labs(y = "Number of reviews", x = "", title = "Distribution of review sentiment")
+
+#And change the theme, i.e. appearance of the plot:
+sentiment_agg %>% 
+ggplot(aes(sentiment_labels, sum))+
+  geom_bar(stat = "identity", fill = "wheat3", width = 0.7)+
+  labs(y = "Number of reviews", x = "", title = "Distribution of review sentiment")+
+  theme_linedraw()
+
+#And change the size of the title:
+sentiment_agg %>% 
+ggplot(aes(sentiment_labels, sum))+
+  geom_bar(stat = "identity", fill = "wheat3", width = 0.7)+
+  labs(y = "Number of reviews", x = "", title = "Distribution of review sentiment")+
+  theme_linedraw()+
+  theme(plot.title = element_text(size=16))
+```
+
+###Wordclouds
+A wordclould is a graphical representation of word frequency of a given text which give greater prominence to words that appear more frequently than others. Thus, wordclouds offer nice and intuitive insights about what is being "talked about" in any given text. 
+You will learn much more about the linguistic considerations when preparing your text data for text mining analyses such as tokenization, lemmatization, etc at the lecture with Michal Zaggl. Therefore, we will not delve too much into these details today. 
+```{r}
+sentiment_words  <- sentiment %>%
+  unnest_tokens(word, content, drop = FALSE) %>% #unnesting the content variable into separate words
+  group_by(word) %>% #grouping each word so that we can count number of times the word appears below
+  mutate(word_total = n()) %>% #counting number of times the word appears
+  ungroup() #ungrouping the words again
+
+#Many words appear in multiple reviews, so let's sort them so that they all only appear once:
+word_counts <- sentiment_words %>%
+  count(word, sort = TRUE)
+
+#Now we are ready to plot our wordcloud:
+wordcloud(words = word_counts$word, freq = word_counts$n, min.freq = 1000,
+          max.words=200, random.order=FALSE, rot.per=0, 
+          colors=brewer.pal(9, "Blues")[5:9], scale=c(3,.5))
+#As you can see, many of the words that appear most frequently does not carry much insight, such as "the", "and", "is", "for", "a". In linguistic terms, these words are called "stop-words" and are usually always removed in text mining analyses, since they don't carry much meaning. 
+
+#The "tidytext" package contains a lexicon called "stop_words" which contains the most common stop-words in the English language. We can remove these words from our "sentiment_words" dataframe using the anti_join function from the "dplyr" package:
+sentiment_words  <- sentiment %>%
+  unnest_tokens(word, content, drop = FALSE) %>% #unnesting the content variable into separate words
+  group_by(word) %>% #grouping each word so that we can count number of times the word appears below
+  mutate(word_total = n()) %>% #counting number of times the word appears
+  ungroup() %>% #ungrouping the words again
+  anti_join(stop_words) #removing stopwords (linguistic term for everyday words like "and", "the", "or" etc.). If not removing stopwords, they would dominate our wordcloud and they don't provide any interesting insights. 
+
+#Again, let's sort them so that they all only appear once:
+word_counts <- sentiment_words %>%
+  count(word, sort = TRUE)
+
+#And plot our wordcloud:
+wordcloud(words = word_counts$word, freq = word_counts$n, min.freq = 1000,
+          max.words=200, random.order=FALSE, rot.per=0, 
+          colors=brewer.pal(9, "Blues")[5:9], scale=c(3,.5))
+
+```
+
+##Police killings
+The next dataset contains information of police killings in the United States in 2015, and originates from the Guardian via Census. 
+
+###Loading data
+```{r}
+#First we read the contents of our locations.csv
+police_killings <- read.csv("police_killings.csv")
+```
+
+###Basic plots
+```{r}
+#First let's look into how the victims were distributed in age:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density()
+
+#We get an error message saying: "Error: Discrete value supplied to continuous scale"
+
+#R thus complains about our variable "age" not fitting the geom_density() function whih is a density curve on a continuous scale. 
+#Let's therefore take a look at how our variables are structured:
+str(police_killings)
+
+#As you can see, our "age" variable is currently in the "chr" format, i.e. a character variable. We can transform it to a numeric variable using the as.numeric() function:
+police_killings$age <- as.numeric(as.character(police_killings$age)) #if passing our variable directly to the as.numeric() function, you will see that it doesn't recognize the numbers that the variable already holds in the chr format, and instead creates new numerical values for every character value. We therefore have to tell it first to treat it as a character and then as a numeric. 
+
+#And now we can try to plot it again:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density()
+
+#Now that is it working, let's see if we can make it look a bit prettier! First we can change the color of the filling/what is under the density curve:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density(fill="#69b3a2") 
+
+#Then we can change the color of the curve line:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density(fill="#69b3a2", color="#e9ecef")
+
+#We can also make the density plot slihtly transparet by adding an alpha argument:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.7)
+
+#And we can change the theme for a more streamlined look:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.7)+
+    theme_bw()
+
+#And we can add a title and x and y labels:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.7)+
+    theme_bw()+
+    labs(title = "Age of deceased", x = "Age", y = "Density")
+
+#And finally, we can change the x scale to be within a certain range:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.7)+
+    theme_bw()+
+    labs(title = "Age of deceased", x = "Age", y = "Density")+
+    xlim(0,100)
+
+
+#Another cool feature in ggplot2 is facet-wraps! Facets allow you to split your plots across different variables. For example, we could check whether there is a difference in age distribution of the deceased across ethnicities:
+police_killings %>%
+  ggplot(aes(x=age)) +
+    geom_density(fill="#69b3a2", color="#e9ecef", alpha=0.7)+
+    theme_bw()+
+    labs(title = "Age of deceased", x = "Age", y = "Density")+
+    xlim(0,100)+
+    facet_wrap(~raceethnicity)
+
+#Instead of looking at the age of the deceased, we could also look into whether there is an even distribution of ethnicity in American police killings:
+police_killings %>%
+  ggplot(aes(x=raceethnicity)) +
+    geom_bar(stat = "count",fill="#69b3a2", color="#e9ecef", alpha=0.8) +
+    ggtitle("What was the ethnicity of the deceased?") +
+    theme_bw()
+
+#Clearly there is an over-representation of White Americans. However, given that 60 % of Americans are Caucasians and only 13 % are African American, the White Americans might not be so over-represented in the statistics after all. Food for thought...
+
+#You can further split your results on more variables. For example, we could fill the bins from the above plot with information of whether the deceased was armed or not:
+police_killings %>%
+  ggplot(aes(x=raceethnicity, fill = armed)) +
+    geom_bar(stat = "count", color="#e9ecef", alpha=0.8) +
+    ggtitle("What was the ethnicity of the deceased?") +
+    theme_bw()
+#However, this often comes with a comprimise of readability, as you can see. 
+
+#Finally, we can also plot the distribution of ethnicity as a pie chart/circle diagram. In order to do this, we must first extract some summary information which we can save directly in a dataframe:
+killings_summary <- data.frame(dist = summary(as.factor(police_killings$raceethnicity)))
+#As you can see, the races are saved as rownames. We don't want that. Instead, we want them to be saved as a seperate column. The "tibble" package has a handy function for that called rownames_to_column():
+killings_summary <- tibble::rownames_to_column(killings_summary, "race")
+
+#And now we're ready to create our pie chart using a combination of the geom_bar() and coord_polar() functions. The scale_fill_brewer() function comes from the "RColorBrewer" package and allows you to choose the color palette you like the most. Google "RColorBrewer palettes" to find more color codes.
+ggplot(killings_summary, aes(x="", y=dist,fill = race)) +
+  geom_bar(stat="identity", width=1) +
+  coord_polar("y", start=0) +
+  scale_fill_brewer(palette = "Pastel2")
+```
+
+###Heatmap
+R also offers a fairly simple way of creating geographical heatmaps based on longitude and latitude coordinates using the "ggmap" package. In the below code chunk, we will create a heatmap laid over Northern America to get a graphical representation of where most police killings take place.  
+```{r}
+#First we must define the bounds of the to be mapped country. United States in our case. Country-wise bound codes can be found on google. 
+map_bounds <- c(left = -125, bottom = 25, right = -65, top = 50)
+
+#We configure the map, bounds, zoom and style, via the get_stamenmap() function in the "ggmap" package. We feed the function with the map-bounds we defined above so that the function knows to search for the stamen tiles that fits the United States, with a zoom-in level and with a maptype argument which defines whether the background should be terrain, toner etc. 
+coords_map <- get_stamenmap(map_bounds, zoom = 5, maptype = "toner-lite")
+
+#Then we render the map using the ggmap() function from the "ggmap" package based on the above coordinate map which is a ggmap-object. We can now plot a visual representation of our police killing data based on two-dimensional kernel density estimation using the stat_density2d() function. The "..level.." argument tells stat_density2d() function to reference the given level of police killings in the dataset, so that more filled-out locations and less transparent locations on the plot reflects more police killings. Finally, we ask the ggmap() function to plot it as a polygon:
+ggmap(coords_map, extent="device", legend="none") +
+  stat_density2d(data = police_killings, aes(x = longitude, y = latitude, fill = ..level.., alpha = ..level..), geom = "polygon")
+
+#We can also play around with the color palette using scale_fill_gradientn() function:
+ggmap(coords_map, extent="device", legend="none") +
+  stat_density2d(data = police_killings, aes(x = longitude, y = latitude, fill = ..level.., alpha = ..level..), geom = "polygon") +
+  scale_fill_gradientn(colours = rev(brewer.pal(5,"Spectral")))
+
+#And change the stylistic theme of the plot, such as giving it a black-and-white theme:
+ggmap(coords_map, extent="device", legend="none") +
+  stat_density2d(data = police_killings, aes(x = longitude, y = latitude, fill = ..level.., alpha = ..level..), geom = "polygon") +
+  scale_fill_gradientn(colours = rev(brewer.pal(5,"Spectral"))) +
+  theme_bw()
+
+```
+
+##GDP data
+The last dataset that we will be working with today contains information about GDP per capita and life expectancy across different countries.
+
+###Loading data
+```{r}
+#As per usual, we start by loading the data:
+gdp_data <- read.csv("gdp_data.csv")
+```
+
+#Basic plots
+```{r}
+#First, we can make a simple line plot that smoothes over conditional means using the geom_smooth() function. By setting the smoothing method to "lm", we state that we expect the simplest type of relatioship: a linear relationship. 
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp)) + 
+  geom_smooth(method = "lm")
+
+#If you change the method to "auto", R chooses a smoothing method automatically (based the size of the largest group across datapoints):
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp)) + 
+  geom_smooth(method = "auto")
+
+#Now we can see that the relationship might actually be closer to e.g. a gamma distribution, where life expectancy strongly increases as GDP increases, but eventually flattens out and actually starts decreasing for the very rich countries. 
+
+#We can also do a boxplot of life expectancy across continents using the geom_boxplot() function
+gdp_data %>%
+  ggplot(aes(x = continent, y = lifeExp)) + 
+    geom_boxplot(alpha = 0.8) + #setting alpha below 1 makes our boxplot somewhat transparent, so that we can still see the grid behind the boxes. 
+    theme_minimal() #for a more minimal stylistic theme.
+            
+#Or we would make a scatterplot of GDP vs. life expectancy for all data points.     
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp)) + 
+  geom_point()
+
+#Let's try to make the above plot more readable and better looking by adding a few arguments! First, we can color code the data points based on continent by adding a coolor argument in our aesthetics:     
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent)) + 
+  geom_point()
+
+#We can also make the data points differ in size based on the size of the population for the given country:
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point()
+
+#Now we have a rather bastiant looking legend that explains the sizes of the dots, which we don't really need. We can remove this by adding a guides() argument and setting size to "none":
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point() + 
+  guides(size = "none")
+
+#We can change the position of the legends explaining data point color using the theme() function:
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point()  + 
+  guides(size = "none") + 
+  theme(legend.position = "bottom")
+
+#And we can make the datapoints slightly transparent to better tell them apart by adding an "alpha" argument:
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point(alpha = 0.8) + 
+  guides(size = "none") + 
+  theme(legend.position = "bottom")
+
+#And we can again change the stylistic theme of the plot:
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point(alpha = 0.8)  + 
+  guides(size = "none") + 
+  theme(legend.position = "bottom") + 
+  theme_minimal()
+
+#And finally we can also change the title labels on the axes of our plot:
+gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point(alpha = 0.8)  + 
+  guides(size = "none") + 
+  theme(legend.position = "bottom") + 
+  theme_minimal() + 
+  labs(title = "Life expectancy vs. GDP per Capita", x = "GDP per Capita", y = "Life expectancy",  col = "") #We set col to be empty to remove the legend title "continent"
+
+#To me, this plot now looks much prettier than the original black-and-white version. Yay for pretty plots! However, there is still one thing that we can add to really make the plot come alive: actually making it live:
+
+#We can use the transition_time() function to only show data points for a given year right after each other, so that it looks like the plot is moving across time (in the period 1952-2007):
+animated_plot <- gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point(alpha = 0.8)  + 
+  guides(size = "none") + 
+  theme(legend.position = "bottom") + 
+  theme_minimal() + 
+  labs(title = "Life expectancy vs. GDP per Capita", x = "GDP per Capita", y = "Life expectancy",  col = "") +
+  transition_time(year)
+
+#And render the GIF using gifski:
+animate(animated_plot,renderer = gifski_renderer())
+
+#We can also add a subtitle that tells us the current year displayed:
+animated_plot <- gdp_data %>%
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) + 
+  geom_point(alpha = 0.8)  + 
+  guides(size = "none") + 
+  theme(legend.position = "bottom") + 
+  theme_minimal() + 
+  labs(title = "Life expectancy vs. GDP per Capita", x = "GDP per Capita", y = "Life expectancy",  col = "") +
+  transition_time(year) +
+  labs(subtitle = "Year: {format(frame_time)}")
+
+#And again render:
+animate(animated_plot,renderer = gifski_renderer())
+
+#anim_save("gdp.gif", pp) #if you want to save this pretty lil' GIF, you can use this command!
+```
+
+###Raincloud plots
+Hopefully, you have gotten a sense of how plots can be build up by first creating a gg-object using the ggplot() function and afterwards adding geoms, themes etc. A graph type that is currently gaining popularity is the Raincloud plots because they carry a lot of information at once. Raincloud plots usually consists of a density plot or half of a violin plot that is flipped 90 degrees so that it is "lying down" and thus looks like a cloud. Below the cloud is a scatter plot consisting of individual data points scattered along the x-axis so that the data points look like rain drops. Often, a boxplot is laid on top of the scatter plot for a visualization of summary statistics (mean, upper- and lower quantiles, outliers), though it sadly messes a bit with the "raincloud" name. 
+
+the raincloud plot provides the user with information both about individual observations and patterns among them (such as striation or clustering), and overall tendencies in the distribution. As illustrated here, even a boxplot plus raw data may hide bimodality or other crucial facets of the data.
+```{r}
+#Below you can see an example of how a raincloud plot consisting of many elements can be created in one big chunk of code where each element is laid on top of the others:
+gdp_data %>% 
+ggplot(aes(x = continent, y = lifeExp)) + #Here we create the gg-object.
+  stat_halfeye( #we use the stat_halfeye() function from the "ggdist" package for creating half a violinplot (i.e. the cloud).
+    aes(
+      color = continent, #we split it out across continents.
+      #fill = after_scale(clr_lighten(color, 0.5)) #we use the after_scale() function from the "prismatic" package for finer color control. 
+    ),
+    adjust = .5, #this is the banwidth of the density estimator.
+    justification = -0.2 #distance between cloud and raindrops. If negative, the raindrops are place below the cloud (and this is what we want, so that our raincloud plot abides to Newton's gravitation law).
+  ) + 
+  geom_boxplot( #Here we add our boxplots
+    aes(
+      color = continent, #again, we split it out across continents.
+      color = after_scale(clr_darken(color, 0.1, space = "HSL")) #and set the color scale
+    ),
+    width = 0.1, #we choose the width of our boxplots to be very narrow, because we don't want them to take the spotlight. 
+    size = 0.2, #and likewise relatively smaller in size
+    outlier.size = 0.4 #we set the size of the outlier dots to be relatively small as well.
+  ) +
+  geom_jitter( #Now we can add our scatter plot. We use the geom_jitter() function because we want the data points to be spread out a bit. If using the usual geom_point(), the data points would fall on a straight line. 
+    aes(color = continent), #again, we split it out across continents.
+    size = 0.3, #we set the size of the data points to be a bit smaller than the outliers of the boxplot, so that our readers can tell the difference. 
+    alpha = .3, #we also set alpha fairly low, so that the data points becomes rather transparent and don't overwhelm the plot. 
+    width = 0.15 #we control how wide the area containing dots should be. We want this to be fairly narrow, so that the data points don't overlay the density plot/cloud.
+  ) +
+  coord_cartesian(xlim = c(1.2, NA), clip = "off") + #the coord_cartesian() function allows us to display a distinct level of the x-scale by zooming on, without changing the underlying data like setting limits on a scale will. 
+  labs( #set names for the x- and y-axes, add title and subtitle.
+    x = "Continent",
+    y = "Life expectancy",
+    title = "Rain cloud plots",
+    subtitle = "Life expectancy across continents"
+  )+
+  theme(
+    panel.grid.major.y = element_blank() #setting panel.grid.majo.y to be blank removes the major grid lines on the y-axis.
+  )+
+  coord_flip() #rotates the plot by 90 degrees. 
+```
